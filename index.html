@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>運ゲー神経衰弱</title>
+<style>
+:root{
+  --felt:#14403a; --felt-deep:#0a2420;
+  --paper:#fbf6ea; --ink:#1f1d1a; --red:#c23b2a;
+  --back:#b8402c; --back-deep:#8f2c1d;
+  --gold:#e9bd55; --muted:#a8c5bd; --line:rgba(255,255,255,.14);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; min-height:100dvh; padding:12px 16px 20px;
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  background:radial-gradient(ellipse at 50% 25%,var(--felt),var(--felt-deep)) fixed;
+  color:#f3efe4;
+  font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;
+  -webkit-tap-highlight-color:transparent;
+}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+
+header{width:100%;max-width:520px;display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+h1{
+  margin:0;font-size:1.35rem;letter-spacing:.08em;font-weight:700;
+  font-family:"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif;
+}
+h1 small{font-size:.7rem;color:var(--gold);letter-spacing:.2em;margin-right:.5em;vertical-align:middle}
+.ghost{background:transparent;border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:.8rem}
+.ghost:hover{border-color:var(--gold)}
+
+#players{width:100%;max-width:520px;display:flex;gap:6px}
+.player{
+  flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:6px 8px;
+  display:flex;flex-direction:column;gap:1px;transition:background .2s,border-color .2s;
+}
+.player.cur{border-color:var(--gold);background:rgba(233,189,85,.14)}
+.player .name{font-size:.72rem;color:var(--muted)}
+.player.cur .name{color:var(--gold)}
+.player .score{font-size:1.05rem;font-weight:700;font-variant-numeric:tabular-nums}
+.player .score span{font-size:.7rem;font-weight:400;color:var(--muted);margin-left:.5em}
+
+#status{min-height:1.5em;font-size:.95rem;text-align:center}
+#status.hit{color:var(--gold);font-weight:700}
+
+#board{
+  --n:2;
+  width:min(100%,520px,calc((100dvh - 300px) / 1.36));
+  min-width:220px; aspect-ratio:1 / 1.36;
+  display:grid; gap:calc(100cqw / var(--n) * .08);
+  grid-template-columns:repeat(var(--n),1fr);
+  grid-template-rows:repeat(var(--n),1fr);
+  container-type:inline-size;
+}
+.card{
+  padding:0;border:0;background:none;perspective:600px;min-width:0;min-height:0;
+  font-size:calc(100cqw / var(--n) * .34);
+  transition:opacity .3s, transform .3s;
+}
+.card .inner{
+  position:relative;width:100%;height:100%;display:block;
+  transform-style:preserve-3d;transition:transform .32s ease;
+}
+.card.up .inner{transform:rotateY(180deg)}
+.card .face{
+  position:absolute;inset:0;border-radius:8%/6%;backface-visibility:hidden;
+  box-shadow:0 2px 6px rgba(0,0,0,.35);
+}
+.card .backside{
+  background:
+    repeating-linear-gradient(45deg,transparent 0 6px,rgba(255,255,255,.13) 6px 7px),
+    repeating-linear-gradient(-45deg,transparent 0 6px,rgba(255,255,255,.13) 6px 7px),
+    linear-gradient(160deg,var(--back),var(--back-deep));
+  border:calc(1em * .09) solid var(--paper);
+}
+.card .front{
+  background:var(--paper);color:var(--ink);transform:rotateY(180deg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;
+  font-family:Georgia,"Times New Roman",serif;font-weight:700;
+}
+.card.red .front{color:var(--red)}
+.card .rank{font-size:1.15em}
+.card .suit{font-size:.9em;margin-top:.08em}
+.card:not(.up):hover .inner{transform:translateY(-3%)}
+.card.drawn{animation:drop .3s ease-out}
+.card.matched{opacity:0;transform:scale(1.15)}
+.card.matched .face{box-shadow:0 0 0 calc(1em * .1) var(--gold),0 0 1em var(--gold)}
+@keyframes drop{from{opacity:0;transform:translateY(30%) scale(.8)}to{opacity:1;transform:none}}
+
+#deck{
+  margin-top:4px;display:flex;align-items:center;gap:14px;
+  background:rgba(0,0,0,.22);border:1px solid var(--line);border-radius:14px;padding:10px 18px 10px 12px;
+}
+#deck:hover:not(:disabled){border-color:var(--gold)}
+#deck:disabled{opacity:.4;cursor:default}
+#deck .pile{
+  width:40px;height:54px;border-radius:5px;border:3px solid var(--paper);
+  background:
+    repeating-linear-gradient(45deg,transparent 0 5px,rgba(255,255,255,.13) 5px 6px),
+    linear-gradient(160deg,var(--back),var(--back-deep));
+  box-shadow:2px 2px 0 #e6dfcd,4px 4px 0 #cfc7b3,5px 6px 8px rgba(0,0,0,.4);
+}
+#deck .label{text-align:left;font-size:.95rem;font-weight:700}
+#deck .label small{display:block;font-weight:400;font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums}
+
+#overlay{
+  position:fixed;inset:0;background:rgba(5,18,16,.82);backdrop-filter:blur(3px);
+  display:flex;align-items:center;justify-content:center;padding:20px;z-index:10;
+}
+#overlay[hidden]{display:none}
+.panel{
+  width:100%;max-width:400px;background:var(--paper);color:var(--ink);
+  border-radius:16px;padding:22px 20px;box-shadow:0 20px 50px rgba(0,0,0,.5);
+}
+.panel h2{margin:0 0 10px;font-size:1.3rem;font-family:"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif}
+.panel p,.panel li{font-size:.9rem;line-height:1.7}
+.panel ul,.panel ol{margin:0 0 14px;padding-left:1.3em}
+.panel .sub{color:#6b655b;font-size:.8rem;margin:0 0 6px}
+.seg{display:flex;gap:6px;margin-bottom:16px}
+.seg button{flex:1;padding:10px 0;border-radius:10px;border:1.5px solid #cfc7b3;background:transparent;font-weight:700}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.primary{width:100%;padding:13px;border:0;border-radius:12px;background:var(--back);color:#fff;font-weight:700;font-size:1rem}
+.primary:hover{background:var(--back-deep)}
+.rank-row{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #e3dccb;font-size:.92rem;font-variant-numeric:tabular-nums}
+.rank-row.win{font-weight:700;color:var(--red)}
+.rank-row:last-of-type{margin-bottom:16px}
+
+@media (prefers-reduced-motion:reduce){
+  .card,.card .inner{transition:none}
+  .card.drawn{animation:none}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1><small>UNGE</small>運ゲー神経衰弱</h1>
+  <button class="ghost" id="newBtn" type="button">新しいゲーム</button>
+</header>
+
+<div id="players" aria-label="スコア"></div>
+<div id="status" role="status" aria-live="polite"></div>
+<div id="board" aria-label="場"></div>
+
+<button id="deck" type="button">
+  <span class="pile" aria-hidden="true"></span>
+  <span class="label">山札からめくる<small id="deckCount"></small></span>
+</button>
+
+<div id="overlay">
+  <div class="panel" id="panel" role="dialog" aria-modal="true"></div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const SUITS = [
+    { mark: '♠', name: 'スペード', red: false },
+    { mark: '♥', name: 'ハート', red: true },
+    { mark: '♦', name: 'ダイヤ', red: true },
+    { mark: '♣', name: 'クラブ', red: false },
+  ];
+  const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+  const INITIAL_FIELD = 4;
+  const DELAY = { match: 700, miss: 1100 };
+  const BEST_KEY = 'unge-shinkei-best';
+
+  const $ = (id) => document.getElementById(id);
+  const boardEl = $('board'), playersEl = $('players'), statusEl = $('status');
+  const deckBtn = $('deck'), deckCountEl = $('deckCount');
+  const overlayEl = $('overlay'), panelEl = $('panel');
+
+  let S = null;             // ゲーム状態
+  let playerCount = 1;
+  const els = new Map();    // card.id -> DOM要素
+
+  // ---------- 盤面の座標 ----------
+  // スロット番号 i を (行, 列) に対応させる。2×2 → 3×3 → 4×4 … と
+  // 外側に一回りずつ広がるので、既存のカードの位置は変わらない。
+  function pos(i) {
+    const k = Math.floor(Math.sqrt(i));
+    const r = i - k * k;
+    return r < k ? [r, k] : [k, r - k];
+  }
+  function gridSize() {
+    let hi = INITIAL_FIELD - 1;
+    S.slots.forEach((s, i) => { if (s) hi = Math.max(hi, i); });
+    return Math.floor(Math.sqrt(hi)) + 1;
+  }
+
+  // ---------- ゲーム進行 ----------
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function newGame(n) {
+    const deck = [];
+    SUITS.forEach((suit, si) => RANKS.forEach((rank, ri) => {
+      deck.push({ id: si * 13 + ri, suit, rank, seen: false });
+    }));
+    shuffle(deck);
+    S = {
+      deck,
+      slots: [],
+      players: Array.from({ length: n }, (_, i) => ({ name: n === 1 ? 'あなた' : `P${i + 1}`, pairs: 0, lucky: 0 })),
+      cur: 0, picks: [], lock: false, turns: 0, over: false,
+      msg: '', hit: false,
+    };
+    for (let i = 0; i < INITIAL_FIELD; i++) S.slots[i] = { card: deck.pop(), up: false };
+    els.clear();
+    boardEl.textContent = '';
+    setPrompt();
+    render();
+  }
+
+  function setPrompt() {
+    const who = S.players.length > 1 ? `${S.players[S.cur].name} の番：` : '';
+    S.msg = who + (S.picks.length === 0 ? '1枚目をえらぶ（場 or 山札）' : '2枚目をえらぶ（場 or 山札）');
+    S.hit = false;
+  }
+
+  function pickField(cardId) {
+    if (!S || S.lock || S.over) return;
+    const idx = S.slots.findIndex((s) => s && s.card.id === cardId);
+    if (idx < 0 || S.slots[idx].up) return;
+    reveal(idx, false);
+  }
+
+  function pickDeck() {
+    if (!S || S.lock || S.over || S.deck.length === 0) return;
+    const card = S.deck.pop();
+    let idx = S.slots.findIndex((s) => !s);
+    if (idx < 0) idx = S.slots.length;
+    S.slots[idx] = { card, up: false };
+    reveal(idx, true);
+  }
+
+  function reveal(idx, fromDeck) {
+    const slot = S.slots[idx];
+    S.picks.push({ idx, wasSeen: slot.card.seen, fromDeck });
+    slot.card.seen = true;
+    slot.up = true;
+    if (S.picks.length < 2) { setPrompt(); render(); return; }
+    resolve();
+  }
+
+  function resolve() {
+    const [p1, p2] = S.picks;
+    const a = S.slots[p1.idx], b = S.slots[p2.idx];
+    const player = S.players[S.cur];
+    const match = a.card.rank === b.card.rank;
+    // 2枚目が「一度も見ていないカード」で揃ったら運だけの勝利
+    const lucky = match && !p2.wasSeen;
+    S.lock = true;
+    S.turns++;
+
+    if (match) {
+      a.matched = b.matched = true;
+      S.msg = lucky ? '🎲 運ゲー成功！ もう1回' : 'そろった！ もう1回';
+      S.hit = true;
+      render();
+      setTimeout(() => {
+        S.slots[p1.idx] = null;
+        S.slots[p2.idx] = null;
+        while (S.slots.length && !S.slots[S.slots.length - 1]) S.slots.pop();
+        player.pairs++;
+        if (lucky) player.lucky++;
+        S.picks = [];
+        S.lock = false;
+        if (S.deck.length === 0 && S.slots.every((s) => !s)) {
+          S.over = true;
+          S.msg = 'おしまい！';
+          render();
+          showResult();
+          return;
+        }
+        setPrompt();
+        render();
+      }, DELAY.match);
+    } else {
+      S.msg = 'はずれ…';
+      S.hit = false;
+      render();
+      setTimeout(() => {
+        a.up = false;
+        b.up = false;
+        S.picks = [];
+        S.cur = (S.cur + 1) % S.players.length;
+        S.lock = false;
+        setPrompt();
+        render();
+      }, DELAY.miss);
+    }
+  }
+
+  // ---------- 描画 ----------
+  function makeCard(card, faceUp) {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'card' + (card.suit.red ? ' red' : '') + (faceUp ? ' up drawn' : '');
+    el.innerHTML =
+      '<span class="inner"><span class="face backside"></span>' +
+      '<span class="face front"><span class="rank"></span><span class="suit"></span></span></span>';
+    el.querySelector('.rank').textContent = card.rank;
+    el.querySelector('.suit').textContent = card.suit.mark;
+    el.addEventListener('click', () => pickField(card.id));
+    return el;
+  }
+
+  function render() {
+    boardEl.style.setProperty('--n', gridSize());
+
+    const alive = new Set();
+    S.slots.forEach((slot, i) => {
+      if (!slot) return;
+      const { card } = slot;
+      alive.add(card.id);
+      let el = els.get(card.id);
+      if (!el) {
+        el = makeCard(card, slot.up);
+        els.set(card.id, el);
+        boardEl.appendChild(el);
+      }
+      const [r, c] = pos(i);
+      el.style.gridRow = r + 1;
+      el.style.gridColumn = c + 1;
+      el.classList.toggle('up', slot.up);
+      el.classList.toggle('matched', !!slot.matched);
+      el.setAttribute('aria-label', slot.up
+        ? `${card.suit.name}の${card.rank}`
+        : `伏せカード ${r + 1}行${c + 1}列`);
+    });
+    for (const [id, el] of els) {
+      if (!alive.has(id)) { el.remove(); els.delete(id); }
+    }
+
+    playersEl.textContent = '';
+    S.players.forEach((p, i) => {
+      const d = document.createElement('div');
+      d.className = 'player' + (i === S.cur && !S.over ? ' cur' : '');
+      d.innerHTML = '<span class="name"></span><span class="score"></span>';
+      d.querySelector('.name').textContent = p.name;
+      d.querySelector('.score').innerHTML = `${p.pairs}<span>ペア ／ 運${p.lucky}</span>`;
+      playersEl.appendChild(d);
+    });
+    if (S.players.length === 1) {
+      const d = document.createElement('div');
+      d.className = 'player';
+      d.innerHTML = `<span class="name">ターン数</span><span class="score">${S.turns}</span>`;
+      playersEl.appendChild(d);
+    }
+
+    statusEl.textContent = S.msg;
+    statusEl.classList.toggle('hit', S.hit);
+
+    deckBtn.disabled = S.deck.length === 0 || S.over;
+    deckCountEl.textContent = S.deck.length ? `のこり ${S.deck.length} 枚` : '山札はもうありません';
+  }
+
+  // ---------- オーバーレイ ----------
+  function showStart() {
+    panelEl.innerHTML = `
+      <h2>運ゲー神経衰弱</h2>
+      <ol>
+        <li>場には伏せカードが4枚、のこりは山札。</li>
+        <li>自分の番に2枚めくる。1枚ごとに<b>場のカード</b>か<b>山札の一番上</b>かを選べる（山札から2枚もOK）。</li>
+        <li>同じ数字ならペア獲得でもう1回。ちがえば、山札から出したカードもそのまま場に伏せて交代。</li>
+      </ol>
+      <p class="sub">人数</p>
+      <div class="seg" id="seg">
+        ${[1, 2, 3, 4].map((n) => `<button type="button" data-n="${n}" aria-pressed="${n === playerCount}">${n}人</button>`).join('')}
+      </div>
+      <button class="primary" id="startBtn" type="button">はじめる</button>`;
+    overlayEl.hidden = false;
+    panelEl.querySelectorAll('#seg button').forEach((b) => b.addEventListener('click', () => {
+      playerCount = Number(b.dataset.n);
+      panelEl.querySelectorAll('#seg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    }));
+    $('startBtn').addEventListener('click', () => { overlayEl.hidden = true; newGame(playerCount); });
+    $('startBtn').focus();
+  }
+
+  function showResult() {
+    let body;
+    if (S.players.length === 1) {
+      const p = S.players[0];
+      let best = null;
+      try { best = Number(localStorage.getItem(BEST_KEY)) || null; } catch (e) { /* 保存できない環境 */ }
+      const isBest = best === null || S.turns < best;
+      if (isBest) { try { localStorage.setItem(BEST_KEY, String(S.turns)); } catch (e) { /* 同上 */ } }
+      body = `
+        <h2>クリア！</h2>
+        <div class="rank-row win"><span>ターン数</span><span>${S.turns}${isBest ? '（自己ベスト）' : ''}</span></div>
+        <div class="rank-row"><span>運だけで揃えたペア</span><span>${p.lucky} / ${p.pairs}</span></div>
+        ${!isBest ? `<div class="rank-row"><span>自己ベスト</span><span>${best}</span></div>` : ''}`;
+    } else {
+      const sorted = [...S.players].sort((x, y) => y.pairs - x.pairs);
+      const top = sorted[0].pairs;
+      const winners = sorted.filter((p) => p.pairs === top);
+      body = `
+        <h2>${winners.length > 1 ? '引き分け！' : `${winners[0].name} の勝ち！`}</h2>
+        ${sorted.map((p) => `<div class="rank-row${p.pairs === top ? ' win' : ''}"><span>${p.name}</span><span>${p.pairs}ペア（うち運 ${p.lucky}）</span></div>`).join('')}`;
+    }
+    panelEl.innerHTML = body + '<button class="primary" id="againBtn" type="button">もう一度</button>';
+    overlayEl.hidden = false;
+    $('againBtn').addEventListener('click', showStart);
+    $('againBtn').focus();
+  }
+
+  deckBtn.addEventListener('click', pickDeck);
+  $('newBtn').addEventListener('click', showStart);
+
+  newGame(1);   // 背景に盤面を出しておく
+  showStart();
+})();
+</script>
+</body>
+</html>
